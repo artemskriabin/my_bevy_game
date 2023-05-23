@@ -70,7 +70,7 @@ fn control_camera(
     };
 
     camera_transform.rotate_local_x(tilt);
-    camera_transform.rotate_local_y(rotation);
+    camera_transform.rotate_y(rotation);
 }
 
 #[derive(Resource)]
