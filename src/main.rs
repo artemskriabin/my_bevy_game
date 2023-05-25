@@ -22,9 +22,9 @@ pub struct HelloPlugin;
 
 impl Plugin for HelloPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(FlyTimer(Timer::from_seconds(1.0, TimerMode::Repeating)))
+        app.insert_resource(SpeedCoefficient(1.0))
             .add_startup_system(setup_env)
-            .add_system(fly)
+            .add_system(fly_forward)
             .add_system(control_camera);
     }
 }
@@ -74,18 +74,31 @@ fn control_camera(
 }
 
 #[derive(Resource)]
-struct FlyTimer(Timer);
+struct SpeedCoefficient(f32);
 
-fn fly(
+fn fly_forward(
     time: Res<Time>,
-    mut timer: ResMut<FlyTimer>,
+    mut coefficient: ResMut<SpeedCoefficient>,
     mut camera: Query<(&mut Camera, &mut Transform, &GlobalTransform), With<Camera3d>>,
+    input: Res<Input<KeyCode>>,
+
 ) {
     let (mut camera, mut camera_transform, camera_global_transform) = camera.single_mut();
 
-    let delta = time.delta_seconds();
+    let delta = time.delta_seconds() * coefficient.0;
     let forward = camera_transform.forward();
+
     camera_transform.translation.z += forward.z * delta;
     camera_transform.translation.x += forward.x * delta;
     camera_transform.translation.y += forward.y * delta;
+
+    let multiplier: f32 = if input.pressed(KeyCode::X) {
+        1.1
+    } else if input.pressed(KeyCode::Z) {
+        0.9
+    } else {
+        1.0
+    };
+
+    coefficient.as_mut().0 *= multiplier;
 }
