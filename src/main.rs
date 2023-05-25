@@ -3,8 +3,8 @@ use bevy::asset::Assets;
 use bevy::DefaultPlugins;
 use bevy::input::Input;
 use bevy::math::{EulerRot, Quat, Vec3};
-use bevy::pbr::{PbrBundle, StandardMaterial};
-use bevy::prelude::{shape, Camera, Camera3d, Camera3dBundle, Color, Commands, GlobalTransform, KeyCode, Mesh, Query, Res, ResMut, Resource, Transform, With, ButtonBundle, Component, Without, ImagePlugin, Image, PluginGroup};
+use bevy::pbr::{PbrBundle, PointLight, StandardMaterial};
+use bevy::prelude::{shape, Camera, Camera3d, Camera3dBundle, Color, Commands, GlobalTransform, KeyCode, Mesh, Query, Res, ResMut, Resource, Transform, With, ButtonBundle, Component, Without, ImagePlugin, Image, PluginGroup, PointLightBundle};
 use bevy::time::{Time, Timer, TimerMode};
 use bevy::utils::default;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
@@ -46,7 +46,7 @@ fn setup_env(
     });
     // camera
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(-2.0, 12.5, 15.0).looking_at(Vec3::new(0.0, 9.0, 0.0), Vec3::Y),
         ..default()
     });
     // target
@@ -56,6 +56,18 @@ fn setup_env(
         transform: Transform::from_xyz(1.0, 3.5, 1.0),
         ..default()
     }   , Target));
+    // light
+    commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            intensity: 3500.0,
+            shadows_enabled: true,
+            range: 100.0,
+            radius: 100.0,
+            ..default()
+        },
+        transform: Transform::from_xyz(4.0, 15.0, 4.0),
+        ..default()
+    });
 }
 
 fn control_camera(
