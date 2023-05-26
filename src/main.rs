@@ -1,15 +1,15 @@
 use bevy::app::{App, Plugin};
 use bevy::asset::Assets;
 use bevy::input::Input;
-use bevy::math::{EulerRot, Quat, Vec3};
+use bevy::math::Vec3;
 use bevy::pbr::{PbrBundle, PointLight, StandardMaterial};
 use bevy::prelude::{
-    shape, ButtonBundle, Camera, Camera3d, Camera3dBundle, Color, Commands, Component,
-    GlobalTransform, Image, ImagePlugin, KeyCode, Mesh, PluginGroup, PointLightBundle, Query, Res,
-    ResMut, Resource, Transform, TransformBundle, With, Without,
+    shape, Camera, Camera3d, Camera3dBundle, Commands, Component, GlobalTransform, Image,
+    ImagePlugin, KeyCode, Mesh, PluginGroup, PointLightBundle, Query, Res, ResMut, Resource,
+    Transform, With, Without,
 };
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::time::{Time, Timer, TimerMode};
+use bevy::time::Time;
 use bevy::utils::default;
 use bevy::DefaultPlugins;
 use bevy_rapier3d::prelude::*;
@@ -31,7 +31,7 @@ impl Plugin for HelloPlugin {
             .add_startup_system(setup_env)
             .add_system(fly_forward)
             .add_system(control_camera)
-            .add_system(fly_away)
+            //.add_system(fly_away)
             .add_system(print_ball_altitude)
             .add_system(boom);
     }
@@ -64,18 +64,31 @@ fn setup_env(
             RigidBody::Dynamic,
             PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::UVSphere::default())),
-                material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
-                transform: Transform::from_xyz(1.0, 13.5, 1.0),
+                material: materials.add(StandardMaterial {
+                    base_color_texture: Some(images.add(uv_debug_texture())),
+                    ..default()
+                }),
+                transform: Transform::from_xyz(1.0, 13.5, 11.0),
                 ..default()
             },
             Target,
         ))
         .insert(Collider::ball(1.0))
-        .insert(Restitution::coefficient(1.7));
-
+        .insert(Restitution {
+            coefficient: 0.9,
+            combine_rule: CoefficientCombineRule::Max,
+        })
+        .insert(Velocity {
+            linvel: Vec3::new(0.0, 0.0, -1.0),
+            angvel: Vec3::new(-1.0, 0.0, 0.0),
+        })
+        .insert(Damping {
+            linear_damping: 0.01,
+            angular_damping: 0.01,
+        });
     // camera
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-2.0, 12.5, 15.0)
+        transform: Transform::from_xyz(-2.0, 12.5, 25.0)
             .looking_at(Vec3::new(0.0, 9.0, 0.0), Vec3::Y),
         ..default()
     });
@@ -99,7 +112,7 @@ fn control_camera(
     mut camera: Query<(&mut Camera, &mut Transform, &GlobalTransform), With<Camera3d>>,
     input: Res<Input<KeyCode>>,
 ) {
-    let (_, mut camera_transform, camera_global_transform) = camera.single_mut();
+    let (_, mut camera_transform, _) = camera.single_mut();
 
     let rotation = if input.pressed(KeyCode::Left) {
         time.delta_seconds()
@@ -130,7 +143,7 @@ fn fly_forward(
     mut camera: Query<(&mut Camera, &mut Transform, &GlobalTransform), With<Camera3d>>,
     input: Res<Input<KeyCode>>,
 ) {
-    let (mut camera, mut camera_transform, camera_global_transform) = camera.single_mut();
+    let (_, mut camera_transform, _) = camera.single_mut();
 
     let delta = time.delta_seconds() * coefficient.0;
     let forward = camera_transform.forward();
@@ -153,9 +166,12 @@ fn fly_forward(
 #[derive(Component)]
 struct Target;
 
+#[allow(dead_code)]
 fn fly_away(mut query: Query<&mut Transform, With<Target>>, time: Res<Time>) {
     for mut transform in &mut query {
-        transform.translation.z -= time.delta_seconds();
+        let delta = time.delta_seconds();
+        transform.translation.z -= delta;
+        transform.rotate_local_x(-delta);
     }
 }
 
@@ -166,7 +182,7 @@ fn boom(
         (With<Camera3d>, Without<Target>),
     >,
 ) {
-    let (mut camera, mut camera_transform, camera_global_transform) = camera.single();
+    let (_, camera_transform, _) = camera.single();
 
     let cube = query.single();
 
