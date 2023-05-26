@@ -1,18 +1,25 @@
 use bevy::app::{App, Plugin};
 use bevy::asset::Assets;
-use bevy::DefaultPlugins;
 use bevy::input::Input;
 use bevy::math::{EulerRot, Quat, Vec3};
 use bevy::pbr::{PbrBundle, PointLight, StandardMaterial};
-use bevy::prelude::{shape, Camera, Camera3d, Camera3dBundle, Color, Commands, GlobalTransform, KeyCode, Mesh, Query, Res, ResMut, Resource, Transform, With, ButtonBundle, Component, Without, ImagePlugin, Image, PluginGroup, PointLightBundle};
+use bevy::prelude::{
+    shape, ButtonBundle, Camera, Camera3d, Camera3dBundle, Color, Commands, Component,
+    GlobalTransform, Image, ImagePlugin, KeyCode, Mesh, PluginGroup, PointLightBundle, Query, Res,
+    ResMut, Resource, Transform, TransformBundle, With, Without,
+};
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::time::{Time, Timer, TimerMode};
 use bevy::utils::default;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::DefaultPlugins;
+use bevy_rapier3d::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugin(HelloPlugin)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .run();
 }
 
@@ -25,6 +32,7 @@ impl Plugin for HelloPlugin {
             .add_system(fly_forward)
             .add_system(control_camera)
             .add_system(fly_away)
+            .add_system(print_ball_altitude)
             .add_system(boom);
     }
 }
@@ -35,27 +43,43 @@ fn setup_env(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    /* Create the ground. */
     //floor
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(shape::Plane::from_size(100.0).into()),
-        material: materials.add(StandardMaterial {
-            base_color_texture: Some(images.add(uv_debug_texture())),
+    commands.spawn((
+        Collider::cuboid(100.0, 0.0, 100.0),
+        PbrBundle {
+            mesh: meshes.add(shape::Plane::from_size(100.0).into()),
+            material: materials.add(StandardMaterial {
+                base_color_texture: Some(images.add(uv_debug_texture())),
+                ..default()
+            }),
             ..default()
-        }),
-        ..default()
-    });
+        },
+    ));
+
+    /* Create the bouncing ball. */
+    // target
+    commands
+        .spawn((
+            RigidBody::Dynamic,
+            PbrBundle {
+                mesh: meshes.add(Mesh::from(shape::UVSphere::default())),
+                material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+                transform: Transform::from_xyz(1.0, 13.5, 1.0),
+                ..default()
+            },
+            Target,
+        ))
+        .insert(Collider::ball(1.0))
+        .insert(Restitution::coefficient(1.7));
+
     // camera
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-2.0, 12.5, 15.0).looking_at(Vec3::new(0.0, 9.0, 0.0), Vec3::Y),
+        transform: Transform::from_xyz(-2.0, 12.5, 15.0)
+            .looking_at(Vec3::new(0.0, 9.0, 0.0), Vec3::Y),
         ..default()
     });
-    // target
-    commands.spawn((PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
-        transform: Transform::from_xyz(1.0, 3.5, 1.0),
-        ..default()
-    }   , Target));
+
     // light
     commands.spawn(PointLightBundle {
         point_light: PointLight {
@@ -105,7 +129,6 @@ fn fly_forward(
     mut coefficient: ResMut<SpeedCoefficient>,
     mut camera: Query<(&mut Camera, &mut Transform, &GlobalTransform), With<Camera3d>>,
     input: Res<Input<KeyCode>>,
-
 ) {
     let (mut camera, mut camera_transform, camera_global_transform) = camera.single_mut();
 
@@ -130,29 +153,30 @@ fn fly_forward(
 #[derive(Component)]
 struct Target;
 
-fn fly_away (
-    mut query: Query<&mut Transform, With<Target>>,
-    time: Res<Time>,
-) {
+fn fly_away(mut query: Query<&mut Transform, With<Target>>, time: Res<Time>) {
     for mut transform in &mut query {
         transform.translation.z -= time.delta_seconds();
     }
 }
 
-fn boom (
+fn boom(
     query: Query<&mut Transform, With<Target>>,
-    camera: Query<(&mut Camera, &mut Transform, &GlobalTransform), (With<Camera3d>, Without<Target>)>,
-
+    camera: Query<
+        (&mut Camera, &mut Transform, &GlobalTransform),
+        (With<Camera3d>, Without<Target>),
+    >,
 ) {
     let (mut camera, mut camera_transform, camera_global_transform) = camera.single();
 
     let cube = query.single();
 
-    if camera_transform.translation.abs_diff_eq( cube.translation, 1.0) {
+    if camera_transform
+        .translation
+        .abs_diff_eq(cube.translation, 1.0)
+    {
         panic!("boom")
     }
 }
-
 
 /// Creates a colorful test pattern
 fn uv_debug_texture() -> Image {
@@ -180,4 +204,10 @@ fn uv_debug_texture() -> Image {
         &texture_data,
         TextureFormat::Rgba8UnormSrgb,
     )
+}
+
+fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
+    for transform in positions.iter() {
+        println!("Ball altitude: {}", transform.translation.y);
+    }
 }
